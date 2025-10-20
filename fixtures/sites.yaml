@@ -1,0 +1,16 @@
+- name: Site 1
+  slug: site-1
+  status: planned
+
+- name: Site 2
+  slug: site-2
+  status: planned
+
+- name: Site 3
+  slug: site-3
+  status: active
+
+- name: Site 4
+  slug: site-4
+  status: active
+

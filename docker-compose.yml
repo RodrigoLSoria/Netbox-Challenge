@@ -1,0 +1,101 @@
+  x-netbox-common: &netbox-common
+    image: netboxcommunity/netbox:v3.7.8
+    env_file:
+      - env/netbox.env
+    volumes:
+      - ./tests:/opt/netbox/netbox/tests
+      - ./configuration:/etc/netbox/config:z,ro
+      - netbox-media-files:/opt/netbox/netbox/media:rw
+      - netbox-scripts-files:/opt/netbox/netbox/scripts:rw
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+
+  services:
+    postgres:
+      image: postgres:14.19
+      container_name: postgres
+      env_file:
+        - env/postgres.env
+      healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U netbox"]
+        interval: 10s
+        retries: 5
+      volumes:
+        - postgres-data:/var/lib/postgresql/data
+
+    redis:
+      image:  redis:6.2.20-alpine
+      container_name: redis
+      command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+      env_file:
+        - env/redis.env
+      healthcheck:
+        test: ["CMD", "redis-cli", "-a", "H733Kdjndks81", "ping"]
+        start_period: 5s
+        timeout: 3s
+        interval: 1s
+        retries: 5
+      volumes:
+        - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+        - redis-data:/data
+
+    redis-cache:
+      image:  redis:6.2.20-alpine
+      container_name: redis_cache
+      command: ["redis-server", "/usr/local/etc/redis/redis-cache.conf"]
+      env_file:
+        - env/redis-cache.env
+      healthcheck:
+        test: ["CMD", "redis-cli", "-a", "t4Ph722qJ5QHeQ1qfu36", "ping"]
+        start_period: 5s
+        timeout: 3s
+        interval: 1s
+        retries: 5
+      volumes:
+        - ./redis/redis-cache.conf:/usr/local/etc/redis/redis-cache.conf:ro
+        - redis-cache-data:/data
+
+    netbox:
+      <<: *netbox-common
+      container_name: netbox
+      ports:
+        - "8000:8080"
+      healthcheck:
+        test: curl -f http://localhost:8080/login/ || exit 1
+        start_period: 90s
+        timeout: 3s
+        interval: 15s
+
+    netbox-worker:
+      <<: *netbox-common
+      container_name: netbox_worker
+      command:
+        - /opt/netbox/venv/bin/python
+        - /opt/netbox/netbox/manage.py
+        - rqworker
+      healthcheck:
+        test: ps aux | grep -v grep | grep -q rqworker || exit 1
+        start_period: 20s
+        timeout: 3s
+        interval: 15s
+
+    netbox-housekeeping:
+      <<: *netbox-common
+      container_name: netbox_housekeeping
+      command:
+        - /opt/netbox/venv/bin/python
+        - /opt/netbox/netbox/manage.py
+        - housekeeping
+
+  volumes:
+    postgres-data:
+    redis-data:
+    redis-cache-data:
+    netbox-media-files:
+    netbox-reports-files:
+    netbox-scripts-files:
